@@ -1,4 +1,4 @@
-namespace Task2;
+namespace Lab2;
 
 public sealed class HistogramControl : Control
 {

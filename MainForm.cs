@@ -1,6 +1,6 @@
 using System.Drawing.Imaging;
 
-namespace Task2;
+namespace Lab2;
 
 public sealed class MainForm : Form
 {

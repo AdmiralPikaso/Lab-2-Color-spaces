@@ -1,4 +1,4 @@
-namespace Task2;
+namespace Lab2;
 
 internal static class Program
 {
