@@ -11,6 +11,10 @@ public sealed class HistogramControl : Control
         MinimumSize = new Size(300, 180);
     }
 
+    public Color BarColor { get; set; } = Color.SteelBlue;
+
+    public string AxisLabel { get; set; } = "Интенсивность";
+
     public void SetValues(int[]? values)
     {
         if (values is not null && values.Length != 256)
@@ -28,7 +32,7 @@ public sealed class HistogramControl : Control
 
         Rectangle plot = new(42, 18, Math.Max(1, Width - 64), Math.Max(1, Height - 55));
         using Pen axis = new(Color.DimGray);
-        using Pen bars = new(Color.SteelBlue);
+        using Pen bars = new(BarColor);
         using Font labelFont = new("Segoe UI", 9);
         using Brush labelBrush = new SolidBrush(Color.DimGray);
 
@@ -37,7 +41,8 @@ public sealed class HistogramControl : Control
         g.DrawString("0", labelFont, labelBrush, plot.Left - 7, plot.Bottom + 4);
         g.DrawString("128", labelFont, labelBrush, plot.Left + plot.Width / 2 - 12, plot.Bottom + 4);
         g.DrawString("255", labelFont, labelBrush, plot.Right - 23, plot.Bottom + 4);
-        g.DrawString("Интенсивность", labelFont, labelBrush, plot.Right - 100, plot.Bottom + 21);
+        g.DrawString(AxisLabel, labelFont, labelBrush,
+            plot.Right - TextRenderer.MeasureText(AxisLabel, labelFont).Width, plot.Bottom + 21);
 
         if (_values is null) return;
         int max = Math.Max(1, _values.Max());
