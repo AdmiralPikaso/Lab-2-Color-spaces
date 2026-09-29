@@ -30,8 +30,7 @@ public sealed class GrayscaleResult : IDisposable
 
 public static partial class ImageProcessing
 {
-    // Both formulas from slide 44 act on 8-bit RGB channel values.
-    // The resulting intensity is rounded to the nearest integer.
+    
     public static byte PalNtscIntensity(byte r, byte g, byte b) =>
         ToByte(0.299 * r + 0.587 * g + 0.114 * b);
 
@@ -76,7 +75,7 @@ public static partial class ImageProcessing
 
                     for (int x = 0; x < input.Width; x++)
                     {
-                        int offset = x * 4; // Format32bppArgb stores B, G, R, A in memory.
+                        int offset = x * 4; 
                         byte b = inputRow[offset];
                         byte g = inputRow[offset + 1];
                         byte r = inputRow[offset + 2];

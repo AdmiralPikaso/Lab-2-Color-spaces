@@ -32,9 +32,7 @@ public sealed class ChannelResult : IDisposable
 
 public static partial class ImageProcessing
 {
-    // Each channel of the source is shown as a grayscale image: the kept channel
-    // is copied into R, G and B, so only that channel survives in the result.
-    // Histograms count the original 0-255 values of the corresponding channel.
+    
     public static ChannelResult CreateChannelResult(Bitmap source)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -71,7 +69,7 @@ public static partial class ImageProcessing
 
                     for (int x = 0; x < input.Width; x++)
                     {
-                        int offset = x * 4; // Format32bppArgb stores B, G, R, A in memory.
+                        int offset = x * 4; 
                         byte b = inputRow[offset];
                         byte g = inputRow[offset + 1];
                         byte r = inputRow[offset + 2];
