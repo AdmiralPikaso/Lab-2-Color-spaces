@@ -35,6 +35,17 @@ public sealed class MainForm : Form
     private GrayscaleResult? _result;
     private ChannelResult? _channels;
 
+    private readonly PictureBox _hsvOriginal = CreatePictureBox();
+    private readonly PictureBox _hsvAdjusted = CreatePictureBox();
+    private readonly TrackBar _hueTrack = new() { Minimum = -180, Maximum = 180, TickFrequency = 30, Value = 0, Width = 260 };
+    private readonly TrackBar _satTrack = new() { Minimum = -100, Maximum = 100, TickFrequency = 20, Value = 0, Width = 260 };
+    private readonly TrackBar _valTrack = new() { Minimum = -100, Maximum = 100, TickFrequency = 20, Value = 0, Width = 260 };
+    private readonly Label _hueValue = new() { AutoSize = true, Text = "0" };
+    private readonly Label _satValue = new() { AutoSize = true, Text = "0" };
+    private readonly Label _valValue = new() { AutoSize = true, Text = "0" };
+    private readonly Label _hsvSourceHint = new() { AutoSize = true, ForeColor = Color.DimGray, Text = "Откройте изображение для обработки." };
+    private HsvResult? _hsvResult;
+
     public MainForm()
     {
         Text = "Цветовые пространства — оттенки серого и каналы R, G, B";
@@ -67,7 +78,7 @@ public sealed class MainForm : Form
         save.Click += (_, _) => SaveSelectedImage();
         _saveChoice.Items.AddRange(new object[]
         {
-            "PAL/NTSC", "HDTV", "Разность", "Канал R", "Канал G", "Канал B"
+            "PAL/NTSC", "HDTV", "Разность", "Канал R", "Канал G", "Канал B", "HSV-результат"
         });
         _saveChoice.SelectedIndex = 0;
         toolbar.Controls.Add(open);
@@ -81,6 +92,7 @@ public sealed class MainForm : Form
         tabs.TabPages.Add(CreateHistogramsTab());
         tabs.TabPages.Add(CreateChannelsTab());
         tabs.TabPages.Add(CreateChannelHistogramsTab());
+        tabs.TabPages.Add(CreateHsvTab());
         root.Controls.Add(tabs, 0, 1);
 
         _status.Padding = new Padding(0, 7, 0, 0);
@@ -169,6 +181,80 @@ public sealed class MainForm : Form
         return page;
     }
 
+    private TabPage CreateHsvTab()
+    {
+        TabPage page = new("3. HSV");
+
+        TableLayoutPanel root = new()
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            Padding = new Padding(8)
+        };
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        TableLayoutPanel images = new()
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1
+        };
+        images.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        images.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        images.Controls.Add(CreateImagePanel("Оригинал", _hsvOriginal), 0, 0);
+        images.Controls.Add(CreateImagePanel("Результат HSV", _hsvAdjusted), 1, 0);
+        root.Controls.Add(images, 0, 0);
+
+        GroupBox controls = new()
+        {
+            Text = "Параметры HSV",
+            Dock = DockStyle.Fill,
+            Padding = new Padding(12),
+            AutoSize = true
+        };
+        TableLayoutPanel sliders = new()
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 3,
+            RowCount = 4,
+            AutoSize = true
+        };
+        sliders.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        sliders.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        sliders.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        sliders.Controls.Add(new Label { Text = "Оттенок (H):", AutoSize = true, Padding = new Padding(0, 10, 8, 0) }, 0, 0);
+        sliders.Controls.Add(_hueTrack, 1, 0);
+        sliders.Controls.Add(_hueValue, 2, 0);
+
+        sliders.Controls.Add(new Label { Text = "Насыщенность (S):", AutoSize = true, Padding = new Padding(0, 10, 8, 0) }, 0, 1);
+        sliders.Controls.Add(_satTrack, 1, 1);
+        sliders.Controls.Add(_satValue, 2, 1);
+
+        sliders.Controls.Add(new Label { Text = "Яркость (V):", AutoSize = true, Padding = new Padding(0, 10, 8, 0) }, 0, 2);
+        sliders.Controls.Add(_valTrack, 1, 2);
+        sliders.Controls.Add(_valValue, 2, 2);
+
+        Button reset = new() { Text = "Сбросить", AutoSize = true };
+        reset.Click += (_, _) => ResetHsvSliders();
+        sliders.Controls.Add(reset, 0, 3);
+        sliders.Controls.Add(_hsvSourceHint, 1, 3);
+        sliders.SetColumnSpan(_hsvSourceHint, 2);
+
+        controls.Controls.Add(sliders);
+        root.Controls.Add(controls, 0, 1);
+
+        page.Controls.Add(root);
+
+        _hueTrack.Scroll += (_, _) => UpdateHsvPreview();
+        _satTrack.Scroll += (_, _) => UpdateHsvPreview();
+        _valTrack.Scroll += (_, _) => UpdateHsvPreview();
+
+        return page;
+    }
+
     private static Control CreateImagePanel(string title, PictureBox picture)
     {
         GroupBox box = new() { Text = title, Dock = DockStyle.Fill, Padding = new Padding(9) };
@@ -232,6 +318,8 @@ public sealed class MainForm : Form
             _redHistogram.SetValues(_channels.RedHistogram);
             _greenHistogram.SetValues(_channels.GreenHistogram);
             _blueHistogram.SetValues(_channels.BlueHistogram);
+            _hsvOriginal.Image = _source;
+            ResetHsvSliders();
             _status.Text = $"{Path.GetFileName(dialog.FileName)} — {_source.Width} × {_source.Height} пикселей";
         }
         catch (Exception ex)
@@ -250,7 +338,16 @@ public sealed class MainForm : Form
     private void SaveSelectedImage()
     {
         int choice = _saveChoice.SelectedIndex;
-        if (choice <= 2 ? _result is null : _channels is null)
+        if (choice == 6)
+        {
+            if (_hsvResult is null)
+            {
+                MessageBox.Show(this, "Сначала откройте изображение.", "Нет результата",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+        }
+        else if (choice <= 2 ? _result is null : _channels is null)
         {
             MessageBox.Show(this, "Сначала откройте изображение.", "Нет результата",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -264,6 +361,7 @@ public sealed class MainForm : Form
             3 => _channels!.Red,
             4 => _channels!.Green,
             5 => _channels!.Blue,
+            6 => _hsvResult!.Adjusted,
             _ => _result!.PalNtsc
         };
         using SaveFileDialog dialog = new()
@@ -279,6 +377,7 @@ public sealed class MainForm : Form
                 3 => "channel-r.png",
                 4 => "channel-g.png",
                 5 => "channel-b.png",
+                6 => "hsv-adjusted.png",
                 _ => "grayscale-pal-ntsc.png"
             }
         };
@@ -293,6 +392,54 @@ public sealed class MainForm : Form
             MessageBox.Show(this, $"Не удалось сохранить изображение: {ex.Message}",
                 "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private void UpdateHsvPreview()
+    {
+        _hueValue.Text = _hueTrack.Value.ToString();
+        _satValue.Text = _satTrack.Value.ToString();
+        _valValue.Text = _valTrack.Value.ToString();
+
+        if (_source is null)
+        {
+            _hsvSourceHint.Text = "Сначала откройте изображение.";
+            return;
+        }
+
+        float hueShift = _hueTrack.Value;
+        float satShift = _satTrack.Value / 100f;
+        float valShift = _valTrack.Value / 100f;
+
+        HsvResult? next = null;
+        try
+        {
+            next = ImageProcessing.CreateHsvResult(_source, hueShift, satShift, valShift);
+
+            _hsvAdjusted.Image = next.Adjusted;
+            _hsvResult?.Dispose();
+            _hsvResult = next;
+            next = null;
+
+            _hsvSourceHint.Text =
+                $"H:{hueShift:+0;-0;0}°  S:{satShift * 100:+0;-0;0}%  V:{valShift * 100:+0;-0;0}%";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Не удалось применить HSV-преобразование: {ex.Message}",
+                "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            next?.Dispose();
+        }
+    }
+
+    private void ResetHsvSliders()
+    {
+        _hueTrack.Value = 0;
+        _satTrack.Value = 0;
+        _valTrack.Value = 0;
+        UpdateHsvPreview();
     }
 
     private void ClearImages()
@@ -310,6 +457,10 @@ public sealed class MainForm : Form
         _redHistogram.SetValues(null);
         _greenHistogram.SetValues(null);
         _blueHistogram.SetValues(null);
+        _hsvOriginal.Image = null;
+        _hsvAdjusted.Image = null;
+        _hsvResult?.Dispose();
+        _hsvResult = null;
         _result?.Dispose();
         _result = null;
         _channels?.Dispose();
